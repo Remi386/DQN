@@ -72,8 +72,14 @@ class Tiger(nn.Module):
             done = False
             self._state = self.env.reset()
 
-            if self._currentEpisode % 1000 == 0:
-                print("{} iteration".format(self._currentEpisode))
+            #Для отладки
+            #if self._currentEpisode % 1000 == 0:
+            #    print("{} iteration".format(self._currentEpisode))
+
+            #Временные модели
+            #if self._currentEpisode % 100000 == 0:
+            #    tstr = TemporaryModel + str(self._currentEpisode) + ".dat"
+            #    torch.save(self.tgt_net.state_dict(), tstr)
 
             if self._currentEpisode % SYNC_TARGET_ITER == 0:
                 self.tgt_net.load_state_dict(self.net.state_dict())
