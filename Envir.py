@@ -3,8 +3,8 @@ import gym
 from gym import spaces
 import numpy as np
 
-FIELD_HEIGHT = 6
-FIELD_WIDTH = 6
+FIELD_HEIGHT = 10
+FIELD_WIDTH = 10
 ACTIONS_COUNT = 8
 START_Y_POSITION = 0
 START_X_POSITION = 0
@@ -16,9 +16,6 @@ ENEMY = 3
 FIELD = np.zeros((FIELD_HEIGHT, FIELD_WIDTH))
 FIELD[START_Y_POSITION, START_X_POSITION] = TIGER
 
-FIELD[3, 2] = RABBIT
-FIELD[1, 5] = ENEMY
-'''
 #rabbits
 FIELD[9, 3] = RABBIT
 FIELD[8, 7] = RABBIT
@@ -29,16 +26,16 @@ FIELD[4, 2] = ENEMY
 FIELD[1, 5] = ENEMY
 FIELD[3, 7] = ENEMY
 FIELD[7, 3] = ENEMY
-'''
+
 StepPenalty = -1.0
 RabbitReward = 20.0
 ReturningReward = 80.0
 EnemyPenalty = -100
 OutOfBoundsPenalty = -10
 TrackingReward = 0.5
-TrackingDistance = 2
-JumpDist = 3
-MaxEpisodes = 200000
+TrackingDistance = 3 #дистанция отслеживания добычи
+JumpDistance = 5 #дистанция, на которую перемещается кролик
+MaxEpisodes = 1000000
 
 # possible actions
 StepUp = 0
@@ -62,7 +59,7 @@ class TigerEnv(gym.Env):
     _PosY = 0
     _TField = np.zeros((FIELD_HEIGHT, FIELD_WIDTH))
     _state = 0
-    _TigerMastery = 0.5
+    _TigerMastery = 1
 
     def __init__(self):
         super(TigerEnv, self).__init__()
@@ -102,18 +99,24 @@ class TigerEnv(gym.Env):
         ...
 
     def _calculateReward(self, NposY, NposX):
+        #Выход за границы
         if (not self._isPossibleToStep(NposY, NposX)):
             return OutOfBoundsPenalty, True, True
+        #Попытка поймать кролика
         if (self._TField[NposY, NposX] == RABBIT and self._state == THungry):
             if(self._tryToCatch(NposY, NposX)):
                 self._state = TFULL
             return RabbitReward, False, False
+        #Наткнулись на врага
         if (self._TField[NposY, NposX] == ENEMY):
             return EnemyPenalty, True, False
+        #Вернулись домой сытыми
         if (NposX == START_X_POSITION and NposY == START_Y_POSITION and self._state == TFULL):
             return ReturningReward, True, False
+        #Добыча поблизости
         if (self._trackingPrey()):
             return TrackingReward, False, False
+        #Обычный шаг
         return StepPenalty, False, False
 
     def _tryToCatch(self, RposY, RposX):
@@ -127,14 +130,15 @@ class TigerEnv(gym.Env):
     def _changeRabbitPosition(self, RposY, RposX):
         success = False
         while not success:
-            x = JumpDist * random.randint(-1, 1)
-            y = JumpDist * random.randint(-1, 1)
+            x = JumpDistance * random.randint(-1, 1)
+            y = JumpDistance * random.randint(-1, 1)
             if RposY + y >= 0 and RposY + y < FIELD_HEIGHT and RposX + x >= 0 and RposX + x < FIELD_WIDTH:
                 if self._TField[RposY + y][RposX + x] == 0:
                     self._TField[RposY + y][RposX + x] = RABBIT
                     success = True
 
     def _trackingPrey(self):
+        #Выслеживание добычи
         rabbitPositions = list()
         for x in range(FIELD_WIDTH):
             for y in range(FIELD_HEIGHT):
@@ -167,13 +171,9 @@ class TigerEnv(gym.Env):
         if (action == StepUpLeft):
             return self._PosY - 1, self._PosX - 1
 
-    #Преобразуем позицию и состояние тигра к индексу
-    def _calculatePositionToIndex(self, X, Y, Tstate):
-        return X + Y * FIELD_WIDTH + Tstate * FIELD_WIDTH * FIELD_HEIGHT
-
 
 gym.envs.register(
-     id='TigerEnv-v1',
-     entry_point='Envir:TigerEnv',
+     id='TigerEnv-v2',
+     entry_point='__main__:TigerEnv',
      max_episode_steps=1000000
 )

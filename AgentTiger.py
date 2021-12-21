@@ -1,19 +1,22 @@
 import torch.nn as nn
 import torch
-import torch.optim as optim
 from Envir import *
+import torch.optim as optim
 import numpy as np
 import collections
 
-ReplayBufferSize = 900
-BATCH_SIZE = 60
+ReplayBufferSize = 700
+BATCH_SIZE = 40 #размер выборки
+GAMMA = 0.8 # для уровнения Беллмана
+#Для оптимизатора Адама
 LEARNING_RATE = 1e-4
-GAMMA = 0.8
 MOMENTUM = 0.8
 SYNC_TARGET_ITER = 500
-hidden_size1 = 200
-hidden_size2 = 140
+#скрытые слои нейронных сетей
+hidden_size1 = 320
+hidden_size2 = 240
 hidden_size3 = 30
+TemporaryModel = "TemporaryWeigths-"
 
 Episode = collections.namedtuple('Episode', field_names=['state', 'step', 'reward', 'done', 'next_state'])
 
@@ -77,7 +80,8 @@ class Tiger(nn.Module):
 
             while not done:
                 _, reward, done, _ = self.step()
-                if(len(self._replayBuffer) < ReplayBufferSize):
+                #Если размер буфера недостаточно большой, пропускаем итерацию
+                if (len(self._replayBuffer) < ReplayBufferSize):
                     continue
 
                 optimizer.zero_grad()
@@ -85,6 +89,7 @@ class Tiger(nn.Module):
                 loss.backward()
                 optimizer.step()
             self._currentEpisode += 1
+
         if outputModelName is not None:
             torch.save(self.tgt_net.state_dict(), outputModelName)
 
@@ -93,6 +98,7 @@ class Tiger(nn.Module):
         next_state, reward, done, _ = self.env.step(action)
 
         if educate:
+            #Запись эпизода в очередь
             eps = Episode(self._state, action, reward, done, next_state)
             self._replayBuffer.append(eps)
 
@@ -107,9 +113,11 @@ class Tiger(nn.Module):
         actions_v = torch.tensor(actions, dtype=torch.int64)
         done_mask = torch.tensor(dones, dtype=torch.bool)
 
+        #Извлекаем q values из состояний и примененных действий к ним
         state_action_values = self.net(states_v).gather(1, actions_v.unsqueeze(-1)).squeeze(-1)
+        #Лучшее действия из следующего состояния
         next_state_values = self.tgt_net(next_states_v).max(1)[0]
-        next_state_values[done_mask] = 0.0
+        next_state_values[done_mask] = 0.0 #Если эпизод финальный - нет следующего состояния, как и награды
         next_state_values = next_state_values.detach()
 
         expected_state_action_values = next_state_values * GAMMA + rewards_v
@@ -130,6 +138,7 @@ class Tiger(nn.Module):
         return action
 
     def _bufferSample(self):
+        #случайная выборка эпизодов
         indices = np.random.choice(len(self._replayBuffer), BATCH_SIZE, replace=False)
         states, actions, rewards, dones, next_states = zip(*[self._replayBuffer[idx] for idx in indices])
         return np.array(states), np.array(actions), np.array(rewards, dtype=np.float32), \
