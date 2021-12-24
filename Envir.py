@@ -142,7 +142,7 @@ class TigerEnv(gym.Env):
         rabbitPositions = list()
         for x in range(FIELD_WIDTH):
             for y in range(FIELD_HEIGHT):
-                if (self._TField[y][x] == 2):
+                if (self._TField[y][x] == RABBIT):
                     rabbitPositions.append([y, x])
         for rabbit in rabbitPositions:
             if abs(self._PosY - rabbit[0]) <= TrackingDistance and \
