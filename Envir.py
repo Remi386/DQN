@@ -35,7 +35,7 @@ OutOfBoundsPenalty = -10
 TrackingReward = 0.5
 TrackingDistance = 3  # дистанция отслеживания добычи
 JumpDistance = 5  # дистанция, на которую перемещается кролик
-MaxEpisodes = 100000
+MaxEpisodes = 50000
 
 # possible actions
 StepUp = 0
@@ -100,7 +100,7 @@ class TigerEnv(gym.Env):
         # Возвращается награда, флаг конца эпизода, флаг выхода за границы,
         # Выход за границы
         if not self._isPossibleToStep(NposY, NposX):
-            return OutOfBoundsPenalty, True, True
+            return OutOfBoundsPenalty, False, True
 
         # Попытка поймать кролика
         if self._TField[NposY, NposX] == RABBIT and self._state == THungry:
