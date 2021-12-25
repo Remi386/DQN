@@ -17,6 +17,8 @@ hidden_size1 = 320
 hidden_size2 = 240
 hidden_size3 = 30
 TemporaryModel = "TemporaryWeigths-"
+PERCENTILE = 80
+
 
 EpisodeStep = collections.namedtuple('EpisodeStep', field_names=['state', 'step', 'reward', 'done', 'next_state'])
 Episode = collections.namedtuple('Episode', field_names=['totalReward', 'steps'])
@@ -32,7 +34,6 @@ class Tiger(nn.Module):
         super(Tiger, self).__init__()
 
         self._replayBuffer = collections.deque(maxlen=ReplayBufferSize)
-        self._replayBufferChanged = collections.deque(maxlen=ReplayBufferSize)
         self.env = gym.make(envName)
         self._action_space = self.env.action_space
         self._observation_space = self.env.observation_space
@@ -91,43 +92,26 @@ class Tiger(nn.Module):
 
             steps = collections.deque()
 
-            changed_flag = False
             while not done:
                 current_state = self._state
-                next_state, reward, done, [action, changed] = self.step()
+                next_state, reward, done, action = self.step()
                 total_reward += reward
-
-                if not changed_flag:
-                    if changed:
-                        changed_flag = True
 
                 # Запись эпизода в очередь
                 step = EpisodeStep(current_state, action, reward, done, next_state)
                 steps.append(step)
-
-
 
                 # Если размер буфера недостаточно большой, пропускаем итерацию
                 if len(self._replayBuffer) < ReplayBufferSize:
                     continue
 
                 optimizer.zero_grad()
-
                 loss = self.loss_function(self._replayBuffer)
                 loss.backward()
-
-                if len(self._replayBufferChanged) > 0:
-                    loss1 = self.loss_function(self._replayBufferChanged, useAll=True)
-                    loss1.backward()
-
                 optimizer.step()
 
             eps = Episode(total_reward, steps)
-
-            if changed_flag:
-                self._replayBufferChanged.append(eps)
-            else:
-                self._replayBuffer.append(eps)
+            self._replayBuffer.append(eps)
 
             self._currentEpisode += 1
 
@@ -140,8 +124,8 @@ class Tiger(nn.Module):
         self._state = next_state
         return self._state, reward, done, [action, changed]
 
-    def loss_function(self, buffer, useAll=False):
-        states, actions, rewards, dones, next_states = self._bufferSample(buffer, useAll)
+    def loss_function(self, buffer):
+        states, actions, rewards, dones, next_states = self._bufferSample(buffer)
         states_v = torch.FloatTensor(states)
         next_states_v = torch.FloatTensor(next_states)
         rewards_v = torch.FloatTensor(rewards)
@@ -172,8 +156,9 @@ class Tiger(nn.Module):
             action = round(act_v.item())
         return action
 
-    def _bufferSample(self, buffer, useAll):
+    def _bufferSample(self, buffer):
         # случайная выборка эпизодов
+        '''
         indices = None
         if useAll:
             indices = range(len(buffer))
@@ -183,6 +168,22 @@ class Tiger(nn.Module):
         total_reward, episode = zip(*[buffer[idx] for idx in indices])
         steps = list([episode[i][j] for i in range(len(episode)) for j in range(len(episode[i]))])
         states, actions, rewards, dones, next_states = zip(*[steps[i] for i in range(len(steps))])
+        '''
+        total_rewards = list(map(lambda s: s.totalReward, buffer))
+        reward_bound = np.percentile(total_rewards, PERCENTILE)
+        states = []
+        actions = []
+        rewards = []
+        dones = []
+        next_states = []
+        for reward, steps in buffer:
+            if reward >= reward_bound:
+                states.extend(map(lambda s: s.state, steps))
+                actions.extend(map(lambda s: s.step, steps))
+                rewards.extend(map(lambda s: s.reward, steps))
+                dones.extend(map(lambda s: s.done, steps))
+                next_states.extend(map(lambda s: s.next_state, steps))
+
         return np.array(states), np.array(actions), np.array(rewards, dtype=np.float32), \
                np.array(dones, dtype=np.bool), np.array(next_states)
 

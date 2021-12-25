@@ -35,7 +35,7 @@ OutOfBoundsPenalty = -10
 TrackingReward = 0.5
 TrackingDistance = 3  # дистанция отслеживания добычи
 JumpDistance = 5  # дистанция, на которую перемещается кролик
-MaxEpisodes = 100000
+MaxEpisodes = 50000
 
 # possible actions
 StepUp = 0
@@ -70,13 +70,13 @@ class TigerEnv(gym.Env):
 
         varPosY, varPosX = self._takeStep(action)
 
-        reward, done, OutOfBounds, changed = self._calculateReward(varPosY, varPosX)
+        reward, done, OutOfBounds = self._calculateReward(varPosY, varPosX)
         if not OutOfBounds:
             self._TField[self._PosY, self._PosX] = 0
             self._TField[varPosY, varPosX] = TIGER
             self._PosX, self._PosY = varPosX, varPosY
 
-        return np.copy(self._TField).flatten(), reward, done, changed
+        return np.copy(self._TField).flatten(), reward, done, {}
 
     def seed(self, seed=1234):
         random.seed(seed)
@@ -100,30 +100,28 @@ class TigerEnv(gym.Env):
         # Возвращается награда, флаг конца эпизода, флаг выхода за границы,
         # Выход за границы
         if not self._isPossibleToStep(NposY, NposX):
-            return OutOfBoundsPenalty, True, True, False
+            return OutOfBoundsPenalty, False, True
 
         # Попытка поймать кролика
         if self._TField[NposY, NposX] == RABBIT and self._state == THungry:
-            changed = False
             if self._tryToCatch(NposY, NposX):
-                changed = True
                 self._state = TFULL
-            return RabbitReward, False, False, changed
+            return RabbitReward, False, False
 
         # Наткнулись на врага
         if self._TField[NposY, NposX] == ENEMY:
-            return EnemyPenalty, True, False, False
+            return EnemyPenalty, True, False
 
         # Вернулись домой сытыми
         if NposX == START_X_POSITION and NposY == START_Y_POSITION and self._state == TFULL:
-            return ReturningReward, True, False, False
+            return ReturningReward, True, False
 
         # Добыча поблизости
         if self._trackingPrey():
-            return TrackingReward, False, False, False
+            return TrackingReward, False, False
 
         # Обычный шаг
-        return StepPenalty, False, False, False
+        return StepPenalty, False, False
 
     def _tryToCatch(self, RposY, RposX):
         if random.uniform(0, 1) < self._TigerMastery:
