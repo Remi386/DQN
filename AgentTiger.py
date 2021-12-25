@@ -6,9 +6,9 @@ import numpy as np
 import collections
 
 ReplayBufferSize = 700
-BATCH_SIZE = 40  # размер выборки
+BATCH_SIZE = 30  # размер выборки
 GAMMA = 0.8  # для уравнения Беллмана
-# Для оптимизатора Адама
+# Для оптимизатора
 LEARNING_RATE = 1e-4
 MOMENTUM = 0.8
 SYNC_TARGET_ITER = 500
@@ -174,17 +174,16 @@ class Tiger(nn.Module):
 
     def _bufferSample(self, buffer, useAll):
         # случайная выборка эпизодов
+        indices = None
         if useAll:
-            total_reward, steps = zip(*[buffer[i] for i in range(len(buffer))])
-            states, actions, rewards, dones, next_states = zip(*[steps[i] for i in range(len(steps))])
-            return np.array(states), np.array(actions), np.array(rewards, dtype=np.float32), \
-                   np.array(dones, dtype=np.bool), np.array(next_states)
+            indices = range(len(buffer))
         else:
             indices = np.random.choice(len(buffer), BATCH_SIZE, replace=False)
-            total_reward, episode = zip(*[buffer[idx] for idx in indices])
-            steps = list([episode[i][j] for i in range(len(episode)) for j in range(len(episode[i]))])
-            states, actions, rewards, dones, next_states = zip(*[steps[i] for i in range(len(steps))])
-            return np.array(states), np.array(actions), np.array(rewards, dtype=np.float32), \
+
+        total_reward, episode = zip(*[buffer[idx] for idx in indices])
+        steps = list([episode[i][j] for i in range(len(episode)) for j in range(len(episode[i]))])
+        states, actions, rewards, dones, next_states = zip(*[steps[i] for i in range(len(steps))])
+        return np.array(states), np.array(actions), np.array(rewards, dtype=np.float32), \
                np.array(dones, dtype=np.bool), np.array(next_states)
 
     def play(self):
