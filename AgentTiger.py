@@ -192,7 +192,7 @@ class Tiger(nn.Module):
         self._currentEpisode = self._EpisodesCount
         self._state = self.env.reset()
         while not done:
-            next_state, reward, done, [action, _] = self.step()
+            next_state, reward, done, action = self.step()
             print("{}, Reward: {}".format(StepsDict[action], reward))
             self.render()
             self._state = next_state

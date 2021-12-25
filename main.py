@@ -1,6 +1,6 @@
 from AgentTiger import *
-ModelName = "TrainedModel_Indicat.dat"
+ModelName = "TrainedModel.dat"
 
 Agent = Tiger("TigerEnv-v2")
-Agent.educate(outputModelName=ModelName)
+Agent.educate(inputModelName=ModelName)
 Agent.play()
