@@ -101,19 +101,19 @@ class Tiger(nn.Module):
                 step = EpisodeStep(current_state, action, reward, done, next_state)
                 steps.append(step)
 
-                # Если размер буфера недостаточно большой, пропускаем итерацию
-                if len(self._replayBuffer) < ReplayBufferSize:
-                    continue
-
-                optimizer.zero_grad()
-                loss = self.loss_function(self._replayBuffer)
-                loss.backward()
-                optimizer.step()
-
             eps = Episode(total_reward, steps)
             self._replayBuffer.append(eps)
-
             self._currentEpisode += 1
+
+            # Если размер буфера недостаточно большой, пропускаем итерацию
+            if len(self._replayBuffer) < ReplayBufferSize:
+                continue
+
+            optimizer.zero_grad()
+            loss = self.loss_function(self._replayBuffer)
+            loss.backward()
+            optimizer.step()
+
 
         if outputModelName is not None:
             torch.save(self.tgt_net.state_dict(), outputModelName)
@@ -122,7 +122,7 @@ class Tiger(nn.Module):
         action = self._egreedy_policy()
         next_state, reward, done, changed = self.env.step(action)
         self._state = next_state
-        return self._state, reward, done, [action, changed]
+        return self._state, reward, done, action
 
     def loss_function(self, buffer):
         states, actions, rewards, dones, next_states = self._bufferSample(buffer)
