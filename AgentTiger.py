@@ -32,7 +32,7 @@ class Tiger(nn.Module):
         super(Tiger, self).__init__()
 
         self._replayBuffer = collections.deque(maxlen=ReplayBufferSize)
-        self._replayBufferChanged = collections.deque(maxlen=ReplayBufferSize)
+        self._stabledReplayBuffer = collections.deque(maxlen=ReplayBufferSize)
         self.env = gym.make(envName)
         self._action_space = self.env.action_space
         self._observation_space = self.env.observation_space
@@ -94,18 +94,12 @@ class Tiger(nn.Module):
             changed_flag = False
             while not done:
                 current_state = self._state
-                next_state, reward, done, [action, changed] = self.step()
+                next_state, reward, done, action = self.step()
                 total_reward += reward
-
-                if not changed_flag:
-                    if changed:
-                        changed_flag = True
 
                 # Запись эпизода в очередь
                 step = EpisodeStep(current_state, action, reward, done, next_state)
                 steps.append(step)
-
-
 
                 # Если размер буфера недостаточно большой, пропускаем итерацию
                 if len(self._replayBuffer) < ReplayBufferSize:
@@ -116,32 +110,30 @@ class Tiger(nn.Module):
                 loss = self.loss_function(self._replayBuffer)
                 loss.backward()
 
-                if len(self._replayBufferChanged) > 0:
-                    loss1 = self.loss_function(self._replayBufferChanged, useAll=True)
+                if len(self._stabledReplayBuffer) > 0:
+                    loss1 = self.loss_function(self._stabledReplayBuffer)
                     loss1.backward()
 
                 optimizer.step()
 
             eps = Episode(total_reward, steps)
 
-            if changed_flag:
-                self._replayBufferChanged.append(eps)
-            else:
-                self._replayBuffer.append(eps)
-
             self._currentEpisode += 1
+
+            if self._evaluate():
+                self._stabledReplayBuffer.append(eps)
 
         if outputModelName is not None:
             torch.save(self.tgt_net.state_dict(), outputModelName)
 
     def step(self):
         action = self._egreedy_policy()
-        next_state, reward, done, changed = self.env.step(action)
+        next_state, reward, done, _ = self.env.step(action)
         self._state = next_state
-        return self._state, reward, done, [action, changed]
+        return self._state, reward, done, action
 
-    def loss_function(self, buffer, useAll=False):
-        states, actions, rewards, dones, next_states = self._bufferSample(buffer, useAll)
+    def loss_function(self, buffer):
+        states, actions, rewards, dones, next_states = self._bufferSample(buffer)
         states_v = torch.FloatTensor(states)
         next_states_v = torch.FloatTensor(next_states)
         rewards_v = torch.FloatTensor(rewards)
@@ -161,6 +153,17 @@ class Tiger(nn.Module):
     def render(self):
         self.env.render()
 
+    def _evaluate(self):
+        results = list()
+        for i in range(10):
+            rewards_sum = 0
+            done = False
+            while not done:
+                _, reward, done, _ = self.step()
+                rewards_sum += reward
+            results.append(rewards_sum)
+        return all(x == results[0] for x in results)
+
     def _egreedy_policy(self):
         action = 0
         if random.uniform(0, 1) < float(self._EpisodesCount - self._currentEpisode) / self._EpisodesCount:
@@ -172,13 +175,10 @@ class Tiger(nn.Module):
             action = round(act_v.item())
         return action
 
-    def _bufferSample(self, buffer, useAll):
+    def _bufferSample(self, buffer):
         # случайная выборка эпизодов
         indices = None
-        if useAll:
-            indices = range(len(buffer))
-        else:
-            indices = np.random.choice(len(buffer), BATCH_SIZE, replace=False)
+        indices = np.random.choice(len(buffer), BATCH_SIZE, replace=False)
 
         total_reward, episode = zip(*[buffer[idx] for idx in indices])
         steps = list([episode[i][j] for i in range(len(episode)) for j in range(len(episode[i]))])
@@ -191,7 +191,7 @@ class Tiger(nn.Module):
         self._currentEpisode = self._EpisodesCount
         self._state = self.env.reset()
         while not done:
-            next_state, reward, done, [action, _] = self.step()
+            next_state, reward, done, action = self.step()
             print("{}, Reward: {}".format(StepsDict[action], reward))
             self.render()
             self._state = next_state

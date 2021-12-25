@@ -70,13 +70,13 @@ class TigerEnv(gym.Env):
 
         varPosY, varPosX = self._takeStep(action)
 
-        reward, done, OutOfBounds, changed = self._calculateReward(varPosY, varPosX)
+        reward, done, OutOfBounds = self._calculateReward(varPosY, varPosX)
         if not OutOfBounds:
             self._TField[self._PosY, self._PosX] = 0
             self._TField[varPosY, varPosX] = TIGER
             self._PosX, self._PosY = varPosX, varPosY
 
-        return np.copy(self._TField).flatten(), reward, done, changed
+        return np.copy(self._TField).flatten(), reward, done, {}
 
     def seed(self, seed=1234):
         random.seed(seed)
@@ -100,30 +100,28 @@ class TigerEnv(gym.Env):
         # Возвращается награда, флаг конца эпизода, флаг выхода за границы,
         # Выход за границы
         if not self._isPossibleToStep(NposY, NposX):
-            return OutOfBoundsPenalty, True, True, False
+            return OutOfBoundsPenalty, True, True
 
         # Попытка поймать кролика
         if self._TField[NposY, NposX] == RABBIT and self._state == THungry:
-            changed = False
             if self._tryToCatch(NposY, NposX):
-                changed = True
                 self._state = TFULL
-            return RabbitReward, False, False, changed
+            return RabbitReward, False, False
 
         # Наткнулись на врага
         if self._TField[NposY, NposX] == ENEMY:
-            return EnemyPenalty, True, False, False
+            return EnemyPenalty, True, False
 
         # Вернулись домой сытыми
         if NposX == START_X_POSITION and NposY == START_Y_POSITION and self._state == TFULL:
-            return ReturningReward, True, False, False
+            return ReturningReward, True, False
 
         # Добыча поблизости
-        if self._trackingPrey():
-            return TrackingReward, False, False, False
+        #if self._trackingPrey():
+        #    return TrackingReward, False, False
 
         # Обычный шаг
-        return StepPenalty, False, False, False
+        return StepPenalty, False, False
 
     def _tryToCatch(self, RposY, RposX):
         if random.uniform(0, 1) < self._TigerMastery:
@@ -142,7 +140,7 @@ class TigerEnv(gym.Env):
                 if self._TField[RposY + y][RposX + x] == 0:
                     self._TField[RposY + y][RposX + x] = RABBIT
                     success = True
-
+    '''
     def _trackingPrey(self):
         # Выслеживание добычи
         rabbitPositions = list()
@@ -155,7 +153,7 @@ class TigerEnv(gym.Env):
                     abs(self._PosX - rabbit[1]) <= TrackingDistance:
                 return True
         return False
-
+    '''
     def _isPossibleToStep(self, NposY, NposX):
         return NposX >= 0 and NposX < FIELD_WIDTH and NposY >= 0 and NposY < FIELD_HEIGHT
 
@@ -177,6 +175,26 @@ class TigerEnv(gym.Env):
         if action == StepUpLeft:
             return self._PosY - 1, self._PosX - 1
 
+    def randomizeEnv(self):
+        global FIELD, START_X_POSITION, START_Y_POSITION
+        FIELD.fill(0)
+        START_X_POSITION, START_Y_POSITION = self._randomize(TIGER, 1)
+        self._randomize(RABBIT, 3)
+        self._randomize(ENEMY, 2)
+        self.reset()
+
+    def _randomize(self, creature, count):
+        x, y = 0, 0
+        for i in range(count):
+            success = False
+            while not success:
+                x = random.randint(0, FIELD_WIDTH - 1)
+                y = random.randint(0, FIELD_HEIGHT - 1)
+                if FIELD[y][x] == 0:
+                    FIELD[y][x] = creature
+                    success = True
+        if creature == TIGER:
+            return x, y
 
 gym.envs.register(
      id='TigerEnv-v2',
