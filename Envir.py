@@ -128,18 +128,25 @@ class TigerEnv(gym.Env):
             return True
         else:
             self._TigerMastery += 0.1
-            self._changeRabbitPosition(RposY, RposX)
+            self.changeRabbitPosition(RposY, RposX)
             return False
 
-    def _changeRabbitPosition(self, RposY, RposX):
+    def changeRabbitPosition(self, RposY, RposX):
         success = False
+        jump = JumpDistance
+        x, y = 0, 0
+        counter = 0
         while not success:
-            x = JumpDistance * random.randint(-1, 1)
-            y = JumpDistance * random.randint(-1, 1)
+            x = jump * random.randint(-1, 1)
+            y = jump * random.randint(-1, 1)
             if RposY + y >= 0 and RposY + y < FIELD_HEIGHT and RposX + x >= 0 and RposX + x < FIELD_WIDTH:
                 if self._TField[RposY + y][RposX + x] == 0:
                     self._TField[RposY + y][RposX + x] = RABBIT
                     success = True
+            counter += 1
+            if counter % 60 == 0:
+                jump -= 1
+        return RposY + y, RposX + x
 
     def _trackingPrey(self):
         # Выслеживание добычи
