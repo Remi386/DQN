@@ -28,14 +28,14 @@ FIELD[3, 7] = ENEMY
 FIELD[7, 3] = ENEMY
 
 StepPenalty = -1.0
-RabbitReward = 20.0
-ReturningReward = 80.0
-EnemyPenalty = -100
-OutOfBoundsPenalty = -10
+RabbitReward = 50.0
+ReturningReward = 100.0
+EnemyPenalty = -300
+OutOfBoundsPenalty = -1000
 TrackingReward = 0.5
 TrackingDistance = 3  # дистанция отслеживания добычи
 JumpDistance = 5  # дистанция, на которую перемещается кролик
-MaxEpisodes = 50000
+MaxEpisodes = 100000
 
 # possible actions
 StepUp = 0

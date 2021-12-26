@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+from datetime import datetime
 from Envir import *
 import torch.optim as optim
 import numpy as np
@@ -17,8 +18,8 @@ hidden_size1 = 320
 hidden_size2 = 240
 hidden_size3 = 30
 TemporaryModel = "TemporaryWeigths-"
-PERCENTILE = 80
-
+PERCENTILE = 75
+EVAL_EPISODES = 20
 
 EpisodeStep = collections.namedtuple('EpisodeStep', field_names=['state', 'step', 'reward', 'done', 'next_state'])
 Episode = collections.namedtuple('Episode', field_names=['totalReward', 'steps'])
@@ -73,7 +74,7 @@ class Tiger(nn.Module):
 
         self._currentEpisode = 0
         optimizer = optim.SGD(self.net.parameters(), lr=LEARNING_RATE, momentum=MOMENTUM)
-        for _ in range(self._EpisodesCount):
+        while True:
             done = False
             total_reward = 0
             self._state = self.env.reset()
@@ -83,9 +84,11 @@ class Tiger(nn.Module):
                 print("{} iteration".format(self._currentEpisode))
 
             # Временные модели
-            # if self._currentEpisode % 100000 == 0:
-            #    tstr = TemporaryModel + str(self._currentEpisode) + ".dat"
-            #    torch.save(self.tgt_net.state_dict(), tstr)
+            if self._currentEpisode % 10000 == 0:
+                now = datetime.now()
+                current_time = now.strftime("%H:%M:%S")
+                tstr = TemporaryModel + current_time + ".dat"
+                torch.save(self.tgt_net.state_dict(), tstr)
 
             if self._currentEpisode % SYNC_TARGET_ITER == 0:
                 self.tgt_net.load_state_dict(self.net.state_dict())
@@ -94,7 +97,7 @@ class Tiger(nn.Module):
 
             while not done:
                 current_state = self._state
-                next_state, reward, done, action = self.step()
+                next_state, reward, done, action = self.step(self._currentEpisode)
                 total_reward += reward
 
                 # Запись эпизода в очередь
@@ -114,12 +117,29 @@ class Tiger(nn.Module):
             loss.backward()
             optimizer.step()
 
+            if self._currentEpisode == self._EpisodesCount:
+                if self.evaluate():
+                    break
+                else:
+                    self._currentEpisode = int(0.6 * self._EpisodesCount)
 
         if outputModelName is not None:
             torch.save(self.tgt_net.state_dict(), outputModelName)
 
-    def step(self):
-        action = self._egreedy_policy()
+    def evaluate(self):
+        total_rewards = list()
+        for i in range(EVAL_EPISODES):
+            done = False
+            sum_reward = 0
+            self._state = self.env.reset()
+            while not done:
+                _, reward, done, _ = self.step(self._EpisodesCount)
+                sum_reward += reward
+            total_rewards.append(sum_reward)
+        return all(reward > 0 for reward in total_rewards)
+
+    def step(self, currEpisode):
+        action = self._egreedy_policy(currEpisode)
         next_state, reward, done, changed = self.env.step(action)
         self._state = next_state
         return self._state, reward, done, action
@@ -145,9 +165,9 @@ class Tiger(nn.Module):
     def render(self):
         self.env.render()
 
-    def _egreedy_policy(self):
+    def _egreedy_policy(self, currEpisode):
         action = 0
-        if random.uniform(0, 1) < float(self._EpisodesCount - self._currentEpisode) / self._EpisodesCount:
+        if random.uniform(0, 1) < float(self._EpisodesCount - currEpisode) / self._EpisodesCount:
             action = self._action_space.sample()
         else:
             state_v = torch.FloatTensor(self._state)
@@ -157,18 +177,7 @@ class Tiger(nn.Module):
         return action
 
     def _bufferSample(self, buffer):
-        # случайная выборка эпизодов
-        '''
-        indices = None
-        if useAll:
-            indices = range(len(buffer))
-        else:
-            indices = np.random.choice(len(buffer), BATCH_SIZE, replace=False)
-
-        total_reward, episode = zip(*[buffer[idx] for idx in indices])
-        steps = list([episode[i][j] for i in range(len(episode)) for j in range(len(episode[i]))])
-        states, actions, rewards, dones, next_states = zip(*[steps[i] for i in range(len(steps))])
-        '''
+        # выборка лучшиъ эпизодов
         total_rewards = list(map(lambda s: s.totalReward, buffer))
         reward_bound = np.percentile(total_rewards, PERCENTILE)
         states = []
@@ -192,7 +201,7 @@ class Tiger(nn.Module):
         self._currentEpisode = self._EpisodesCount
         self._state = self.env.reset()
         while not done:
-            next_state, reward, done, action = self.step()
+            next_state, reward, done, action = self.step(self._EpisodesCount)
             print("{}, Reward: {}".format(StepsDict[action], reward))
             self.render()
             self._state = next_state
